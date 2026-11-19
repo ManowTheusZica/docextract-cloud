@@ -1,5 +1,8 @@
 # DocExtract Cloud
 
+![CI](https://github.com/ManowTheusZica/docextract-cloud/actions/workflows/ci.yml/badge.svg) ![Python](https://img.shields.io/badge/python-3.12+-3776AB?logo=python&logoColor=white)
+
+
 API que recebe um PDF/documento, extrai campos brasileiros (CPF, CNPJ, SEI, PA, CEP,
 placa, datas) e devolve JSON estruturado com confianca por campo. Multi-usuario, com
 autenticacao, historico e fila de processamento.
