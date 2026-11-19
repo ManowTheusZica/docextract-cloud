@@ -1,0 +1,28 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://docextract:docextract@db:5432/docextract
+      SECRET_KEY: ${SECRET_KEY:-troque-esta-chave}
+      QUEUE_MODE: thread
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: docextract
+      POSTGRES_PASSWORD: docextract
+      POSTGRES_DB: docextract
+    volumes:
+      - dados:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docextract"]
+      interval: 5s
+      retries: 5
+
+volumes:
+  dados:
