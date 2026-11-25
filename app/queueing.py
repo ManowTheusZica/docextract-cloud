@@ -1,7 +1,8 @@
 """Processamento de documentos: inline (testes/dev) ou thread (API local).
 
-Em producao, o gancho e o mesmo: troque `submit` por um enfileirador
-(Celery/RQ/SQS) e mantenha `process_document` como unica fonte de verdade.
+Em producao com mais de uma replica, use QUEUE_MODE=redis: a API publica na
+lista do Redis e o worker (`python -m app.worker`) consome. `process_document`
+continua sendo a unica fonte de verdade do pipeline.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ from .config import settings
 from .database import SessionLocal
 from .extraction import ExtracaoError, extrair_texto
 from .fields import extrair_campos
+from .metrics import registro
 from .models import Document, DocumentField, Job
 
 log = logging.getLogger(__name__)
@@ -60,6 +62,7 @@ def process_document(document_id: int, conteudo: bytes) -> None:
             if trabalho:
                 trabalho.status = "done"
                 trabalho.finished_at = datetime.now(timezone.utc)
+            registro.extracoes.inc(resultado=documento.status)
         except ExtracaoError as exc:
             documento.status = "error"
             documento.error = str(exc)
@@ -67,6 +70,7 @@ def process_document(document_id: int, conteudo: bytes) -> None:
                 trabalho.status = "error"
                 trabalho.error = str(exc)
                 trabalho.finished_at = datetime.now(timezone.utc)
+            registro.extracoes.inc(resultado="erro")
         except Exception as exc:  # pragma: no cover - salvaguarda
             log.exception("falha inesperada no documento %s", document_id)
             documento.status = "error"
@@ -75,6 +79,7 @@ def process_document(document_id: int, conteudo: bytes) -> None:
                 trabalho.status = "error"
                 trabalho.error = str(exc)
                 trabalho.finished_at = datetime.now(timezone.utc)
+            registro.extracoes.inc(resultado="falha_interna")
 
         db.commit()
     finally:
@@ -82,10 +87,17 @@ def process_document(document_id: int, conteudo: bytes) -> None:
 
 
 def submit(document_id: int, conteudo: bytes) -> None:
-    if settings.queue_mode == "thread":
+    """Publica o trabalho conforme QUEUE_MODE: inline, thread ou redis."""
+    modo = settings.queue_mode
+    if modo == "thread":
         _executor.submit(process_document, document_id, conteudo)
+    elif modo == "redis":
+        from .queue_redis import publicar
+
+        publicar(document_id, conteudo)
     else:
         process_document(document_id, conteudo)
+    registro.fila.inc(modo=modo)
 
 
 def hash_conteudo(conteudo: bytes) -> str:

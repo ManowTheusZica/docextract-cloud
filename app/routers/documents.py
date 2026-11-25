@@ -55,6 +55,9 @@ def enviar(
     db.add(Job(document_id=documento.id, status="queued"))
     db.commit()
 
+    from ..metrics import registro
+
+    registro.documentos.inc(tipo=nome.rsplit(".", 1)[-1].lower())
     submit(documento.id, conteudo)
 
     db.refresh(documento)

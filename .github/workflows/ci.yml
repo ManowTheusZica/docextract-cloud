@@ -16,6 +16,12 @@ jobs:
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Rodar testes
-        run: python -m pytest -q
+          pip install -r requirements.txt pytest-cov
+      - name: Rodar testes com cobertura
+        run: python -m pytest -q --cov=app --cov-report=term-missing --cov-fail-under=80
+      - name: Checar que o app sobe e expoe /health e /metrics
+        run: |
+          DATABASE_URL=sqlite:///./ci.db python -m uvicorn app.main:app --port 8000 &
+          sleep 5
+          curl -fsS http://127.0.0.1:8000/health | tee /dev/stderr
+          curl -fsS http://127.0.0.1:8000/metrics | grep docextract_http_duracao_segundos
